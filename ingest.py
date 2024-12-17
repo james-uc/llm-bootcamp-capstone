@@ -1,15 +1,17 @@
-import os
-from dotenv import load_dotenv
-from llama_index.core import SimpleDirectoryReader, VectorStoreIndex, StorageContext
+from llama_index.core import (
+    Settings,
+    SimpleDirectoryReader,
+    StorageContext,
+    VectorStoreIndex,
+)
 from llama_index.core.node_parser import SimpleNodeParser
 from llama_index.vector_stores.weaviate import WeaviateVectorStore
+from llama_index.embeddings.openai import OpenAIEmbedding
 import weaviate
 from weaviate.classes.init import Auth
+from config import CONFIG
 
-load_dotenv()
-
-wcd_url = os.environ["WCD_URL"]
-wcd_api_key = os.environ["WCD_API_KEY"]
+Settings.embed_model = OpenAIEmbedding(model=CONFIG["embed_model"])
 
 # Ingest the docs in the papers folder
 try:
@@ -25,12 +27,14 @@ nodes = parser.get_nodes_from_documents(docs)
 
 # connect to weaviate
 client = weaviate.connect_to_weaviate_cloud(
-    cluster_url=wcd_url,
-    auth_credentials=Auth.api_key(wcd_api_key),
+    cluster_url=CONFIG["wcd_url"],
+    auth_credentials=Auth.api_key(CONFIG["wcd_api_key"]),
 )
 
 # construct vector store
-vector_store = WeaviateVectorStore(weaviate_client=client, index_name="Papers")
+vector_store = WeaviateVectorStore(
+    weaviate_client=client, index_name=CONFIG["vector_store_name"]
+)
 
 # setting up the storage for the embeddings
 storage_context = StorageContext.from_defaults(vector_store=vector_store)

@@ -1,24 +1,45 @@
 import chainlit as cl
 import openai
-import os
 import base64
 from langsmith.wrappers import wrap_openai
 from langsmith import traceable
+import weaviate
+from weaviate.classes.init import Auth
+from weaviate.classes.query import MetadataQuery
+from config import CONFIG
 
-config = {
-    "api_key": os.getenv("OPENAI_API_KEY"),
-    "endpoint_url": "https://api.openai.com/v1",
-}
-
-model_kwargs = {
-    "model": "gpt-4o",
-    "temperature": 1.2,
-    "max_tokens": 500,
-}
-
-client = wrap_openai(
-    openai.AsyncClient(api_key=config["api_key"], base_url=config["endpoint_url"])
+openai_client = wrap_openai(
+    openai.AsyncClient(
+        api_key=CONFIG["openai_api_key"], base_url=CONFIG["openai_endpoint_url"]
+    )
 )
+
+weaviate_client = weaviate.connect_to_weaviate_cloud(
+    cluster_url=CONFIG["wcd_url"],
+    auth_credentials=Auth.api_key(CONFIG["wcd_api_key"]),
+)
+
+weaviate_collection = weaviate_client.collections.get(CONFIG["vector_store_name"])
+
+
+async def check_rag(query):
+    query_embedding_resp = await openai_client.embeddings.create(
+        model=CONFIG["embed_model"], input=query
+    )
+    query_embedding = query_embedding_resp.data[0].embedding
+
+    similar_texts = weaviate_collection.query.near_vector(
+        near_vector=query_embedding,
+        certainty=0.80,
+        limit=3,
+        return_properties=["text"],
+        return_metadata=MetadataQuery(distance=True),
+    )
+
+    if len(similar_texts.objects) == 0:
+        return None
+
+    return "\n\n---\n\n".join([doc.properties["text"] for doc in similar_texts.objects])
 
 
 @cl.on_message
@@ -71,9 +92,18 @@ async def on_message(message: cl.Message):
     response_message = cl.Message(content="")
     await response_message.send()
 
+    rag_context = await check_rag(message.content)
+    if rag_context:
+        message_history.append(
+            {
+                "role": "system",
+                "content": f"Use the following additional information to respond to the most recent message: {rag_context}",
+            }
+        )
+
     # Pass in the full message history for each request
-    stream = await client.chat.completions.create(
-        messages=message_history, stream=True, **model_kwargs
+    stream = await openai_client.chat.completions.create(
+        messages=message_history, stream=True, **CONFIG["openai_client_kwargs"]
     )
     async for part in stream:
         if token := part.choices[0].delta.content or "":
