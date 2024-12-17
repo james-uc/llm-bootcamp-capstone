@@ -30,16 +30,18 @@ async def check_rag(query):
 
     similar_texts = weaviate_collection.query.near_vector(
         near_vector=query_embedding,
-        certainty=0.80,
-        limit=3,
+        certainty=0.78,
+        limit=10,
         return_properties=["text"],
         return_metadata=MetadataQuery(distance=True),
     )
 
     if len(similar_texts.objects) == 0:
-        return None
+        return None, None
 
-    return "\n\n---\n\n".join([doc.properties["text"] for doc in similar_texts.objects])
+    return len(similar_texts.objects), "\n\n---\n\n".join(
+        [doc.properties["text"] for doc in similar_texts.objects]
+    )
 
 
 @cl.on_message
@@ -51,7 +53,7 @@ async def on_message(message: cl.Message):
         [
             {
                 "role": "system",
-                "content": "You are an AI assistant. Please answer the user's questions to the best of your abilities.",
+                "content": "You are an AI assistant. Please answer the user's questions to the best of your abilities. If you are provided with context following a user query, please provide a response drawing only from the context and the message history.",
             }
         ],
     )
@@ -89,17 +91,27 @@ async def on_message(message: cl.Message):
     else:
         message_history.append({"role": "user", "content": message.content})
 
-    response_message = cl.Message(content="")
-    await response_message.send()
-
-    rag_context = await check_rag(message.content)
-    if rag_context:
+    rag_doc_count, rag_context = await check_rag(message.content)
+    if rag_doc_count:
         message_history.append(
             {
                 "role": "system",
-                "content": f"Use the following additional information to respond to the most recent message: {rag_context}",
+                "content": f"Use only following context and the message history to respond to the most recent message. Context: {rag_context}",
             }
         )
+        elements = [
+            cl.Text(
+                content=rag_context,
+                display="inline",
+            )
+        ]
+        await cl.Message(
+            content=f"Additional context injected ({rag_doc_count} texts)",
+            elements=elements,
+        ).send()
+
+    response_message = cl.Message(content="")
+    await response_message.send()
 
     # Pass in the full message history for each request
     stream = await openai_client.chat.completions.create(

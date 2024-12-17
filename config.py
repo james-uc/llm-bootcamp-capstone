@@ -11,7 +11,7 @@ CONFIG = {
     "embed_model": "text-embedding-3-large",
     "vector_store_name": "Papers",
     "openai_client_kwargs": {
-        "model": "gpt-4o",
+        "model": "gpt-4o-mini",
         "temperature": 0.2,
         "max_tokens": 500,
     },
