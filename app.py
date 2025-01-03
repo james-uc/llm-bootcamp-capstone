@@ -32,7 +32,7 @@ async def check_rag(query):
 
     similar_texts = weaviate_collection.query.near_vector(
         near_vector=query_embedding,
-        certainty=0.6,
+        certainty=0.78,
         limit=10,
         return_properties=["text", "file_name"],
         return_metadata=MetadataQuery(distance=True),
@@ -57,7 +57,7 @@ async def update_system_prompt(query, full_paper_id):
 
     if CURRENT_PAPER_ID:
         full_text = get_full_text(CURRENT_PAPER_ID)
-        SYSTEM_PROMPT += f"The full text for paper {full_paper_id} is: <paper_full_text><paper_id>{full_paper_id}</paper_id>{full_text}</paper_full_text>"
+        SYSTEM_PROMPT += f"The full text for paper {CURRENT_PAPER_ID} is: <paper_full_text><paper_id>{CURRENT_PAPER_ID}</paper_id>{full_text}</paper_full_text>"
 
     rag_docs = await check_rag(query)
     if rag_docs:
