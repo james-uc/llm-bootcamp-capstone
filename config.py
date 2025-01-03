@@ -15,4 +15,5 @@ CONFIG = {
         "temperature": 0.2,
         "max_tokens": 500,
     },
+    "database_path": "papers.db",
 }
