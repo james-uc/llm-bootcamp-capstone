@@ -2,22 +2,32 @@ import sqlite3
 from config import CONFIG
 
 
-def get_summaries():
+def get_summaries(topic_id):
     conn = sqlite3.connect(CONFIG["database_path"])
     cursor = conn.cursor()
-    cursor.execute("SELECT id, summary FROM papers")
+    cursor.execute("SELECT id, summary FROM papers where topic_id = ?", (topic_id,))
     summaries = cursor.fetchall()
     conn.close()
     return summaries
 
 
-def get_full_text(id):
+def get_full_paper(id):
     conn = sqlite3.connect(CONFIG["database_path"])
     cursor = conn.cursor()
     cursor.execute("SELECT full_text FROM papers WHERE id = ?", (id,))
-    full_text = cursor.fetchone()[0]
+    result = cursor.fetchone()
+    full_paper = {"id": id, "text": result[0]} if result else None
     conn.close()
-    return full_text
+    return full_paper
+
+
+def get_topics():
+    conn = sqlite3.connect(CONFIG["database_path"])
+    cursor = conn.cursor()
+    cursor.execute("SELECT DISTINCT topic_id FROM papers")
+    topics = cursor.fetchall()
+    conn.close()
+    return topics
 
 
 def extract_tag_content(text: str, tag_name: str) -> str | None:

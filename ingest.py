@@ -13,9 +13,16 @@ from weaviate.classes.init import Auth
 import openai
 import sqlite3
 import os
+import sys
 from config import CONFIG
 
 Settings.embed_model = OpenAIEmbedding(model=CONFIG["embed_model"])
+
+if len(sys.argv) < 3:
+    print(f"Usage: {sys.argv[0]} <directory> <topic_id>")
+else:
+    directory = sys.argv[1]
+    topic_id = sys.argv[2]
 
 #
 # Read the docs in the papers folder
@@ -23,7 +30,7 @@ Settings.embed_model = OpenAIEmbedding(model=CONFIG["embed_model"])
 try:
     file_extractor = {".pdf": PDFReader(return_full_document=True)}
     docs = SimpleDirectoryReader(
-        "./papers", filename_as_id=True, file_extractor=file_extractor
+        directory, filename_as_id=True, file_extractor=file_extractor
     ).load_data()
 except Exception as e:
     print(f"Error loading the documents: {e}")
@@ -40,9 +47,9 @@ openai_client = openai.Client(
 )
 
 for doc in docs:
-    doc.id_ = os.path.relpath(doc.id_.replace("_part_0", ""), "papers")
-    print("Processing document:", doc.id_)
+    doc.id_ = os.path.relpath(doc.id_.replace("_part_0", ""), directory)
 
+    print("Processing document:", doc.id_)
     try:
         message_history = [
             {
@@ -59,8 +66,8 @@ for doc in docs:
         )
 
         cursor.execute(
-            "INSERT INTO papers (id, full_text, summary) VALUES (?, ?, ?)",
-            (doc.id_, doc.text, openai_response.choices[0].message.content),
+            "INSERT INTO papers (id, full_text, summary, topic_id) VALUES (?, ?, ?, ?)",
+            (doc.id_, doc.text, openai_response.choices[0].message.content, topic_id),
         )
         conn.commit()
 
@@ -69,6 +76,7 @@ for doc in docs:
 
 conn.close()
 
+exit()
 #
 # Index the papers into Weaviate for RAG
 #

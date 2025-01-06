@@ -6,7 +6,7 @@ import weaviate
 from weaviate.classes.init import Auth
 from weaviate.classes.query import MetadataQuery
 import json
-from helpers import get_summaries, get_full_text, extract_tag_content
+from helpers import get_topics, get_summaries, get_full_paper, extract_tag_content
 from prompts import BASE_PROMPT
 from config import CONFIG
 
@@ -41,29 +41,45 @@ async def check_rag(query):
     return [doc.properties for doc in similar_texts.objects]
 
 
-SYSTEM_PROMPT = BASE_PROMPT
-CURRENT_PAPER_ID = None
+async def get_system_prompt(query, topic, full_paper_id):
+    user_selections = cl.user_session.get("user_selections", {})
+    current_full_paper_id = user_selections.get("full_paper_id", None)
+    current_full_paper = user_selections.get("current_full_paper", None)
+    current_topic = user_selections.get("topic", None)
+    current_summaries = user_selections.get("summaries", None)
+    current_rag_docs = user_selections.get("rag_docs", None)
 
+    if topic and topic != current_topic:
+        if topic_summaries := get_summaries(topic):
+            user_selections["topic"] = topic
+            current_summaries = user_selections["summaries"] = topic_summaries
 
-async def update_system_prompt(query, full_paper_id):
-    global SYSTEM_PROMPT
-    global CURRENT_PAPER_ID
+    if full_paper_id and full_paper_id != current_full_paper_id:
+        if full_paper := get_full_paper(full_paper_id):
+            user_selections["full_paper_id"] = full_paper_id
+            current_full_paper = user_selections["current_full_paper"] = full_paper
 
-    paper_summaries = get_summaries()
-    SYSTEM_PROMPT = f"{BASE_PROMPT}\n\n You have access to the following papers: <available_papers>{json.dumps(paper_summaries)}</available_papers>"
+    system_prompt = BASE_PROMPT
+    topics = get_topics()
+    system_prompt += f"\n\nThe following are the topics you can discuss: <topics>{json.dumps(topics)}</topics>"
 
-    if full_paper_id:
-        CURRENT_PAPER_ID = full_paper_id
+    if current_topic:
+        system_prompt += f"\n\nYou are currently discussing the topic: {current_topic}"
+    else:
+        system_prompt += "\n\nPlease prompt the user to select among one of the topics you are able to discuss."
 
-    if CURRENT_PAPER_ID:
-        full_text = get_full_text(CURRENT_PAPER_ID)
-        SYSTEM_PROMPT += f"The full text for paper {CURRENT_PAPER_ID} is: <paper_full_text><paper_id>{CURRENT_PAPER_ID}</paper_id>{full_text}</paper_full_text>"
+    if current_summaries:
+        system_prompt += f"\n\nThe following are summaries of papers you can get the full text for: <paper_summaries>{json.dumps(current_summaries)}</paper_summaries>"
+    if current_full_paper:
+        system_prompt += f"\n\nYou currently have the full text for the following full paper: <full_paper_text>{json.dumps(current_full_paper)}</full_paper_text>"
 
-    rag_docs = await check_rag(query)
-    if rag_docs:
-        SYSTEM_PROMPT += f"Prioritize the following paper passages to respond to the most recent message: <available_paper_passages>{json.dumps(rag_docs)}</available_paper_passages>"
+    if rag_docs := await check_rag(query):
+        current_rag_docs = user_selections["rag_docs"] = rag_docs
+    if current_rag_docs:
+        system_prompt += f"\n\nPrioritize the following verbatim paper passages to respond to the most recent message: <verbatim_paper_passages>{json.dumps(rag_docs)}</verbatim_paper_passages>"
 
-    return SYSTEM_PROMPT
+    cl.user_session.set("user_selections", user_selections)
+    return system_prompt
 
 
 @cl.on_message
@@ -75,7 +91,7 @@ async def on_message(message: cl.Message):
         [],
     )
 
-    system_prompt = await update_system_prompt(message.content, None)
+    system_prompt = await get_system_prompt(message.content, None, None)
 
     message_history.insert(0, {"role": "system", "content": system_prompt})
     message_history.append({"role": "user", "content": message.content})
@@ -101,8 +117,14 @@ async def on_message(message: cl.Message):
         function_args = function_call.get("arguments", {})
 
         if function_name == "get_full_text":
-            system_prompt = await update_system_prompt(
-                message.content, function_args["id"]
+            system_prompt = await get_system_prompt(
+                message.content, None, function_args["id"]
+            )
+            message_history[0] = {"role": "system", "content": system_prompt}
+
+        elif function_name == "change_topic":
+            system_prompt = await get_system_prompt(
+                message.content, function_args["topic"], None
             )
             message_history[0] = {"role": "system", "content": system_prompt}
 
