@@ -16,12 +16,10 @@ openai_client = wrap_openai(
     )
 )
 
-weaviate_client = weaviate.connect_to_weaviate_cloud(
+weaviate_client = weaviate.use_async_with_weaviate_cloud(
     cluster_url=CONFIG["wcd_url"],
     auth_credentials=Auth.api_key(CONFIG["wcd_api_key"]),
 )
-
-weaviate_collection = weaviate_client.collections.get(CONFIG["vector_store_name"])
 
 
 async def check_rag(query):
@@ -30,7 +28,13 @@ async def check_rag(query):
     )
     query_embedding = query_embedding_resp.data[0].embedding
 
-    similar_texts = weaviate_collection.query.near_vector(
+    if not await weaviate_client.is_ready():
+        await weaviate_client.connect()
+        if not await weaviate_client.is_ready():
+            return None
+
+    weaviate_collection = weaviate_client.collections.get(CONFIG["vector_store_name"])
+    similar_texts = await weaviate_collection.query.near_vector(
         near_vector=query_embedding,
         certainty=0.78,
         limit=10,
@@ -71,15 +75,22 @@ async def get_system_prompt(query, topic, full_paper_id):
     if current_summaries:
         system_prompt += f"\n\nThe following are summaries of papers you can get the full text for: <paper_summaries>{json.dumps(current_summaries)}</paper_summaries>"
     if current_full_paper:
-        system_prompt += f"\n\nYou currently have the full text for the following full paper: <full_paper_text>{json.dumps(current_full_paper)}</full_paper_text>"
+        system_prompt += f"\n\nYou have already requested and loaded the full text for paper with id '{full_paper_id}': <paper_full_text>{json.dumps(current_full_paper)}</paper_full_text>"
 
-    if rag_docs := await check_rag(query):
+    rag_docs = await check_rag(query)
+    if rag_docs:
         current_rag_docs = user_selections["rag_docs"] = rag_docs
     if current_rag_docs:
         system_prompt += f"\n\nPrioritize the following verbatim paper passages to respond to the most recent message: <verbatim_paper_passages>{json.dumps(rag_docs)}</verbatim_paper_passages>"
 
     cl.user_session.set("user_selections", user_selections)
     return system_prompt
+
+
+@cl.on_chat_start
+@traceable
+async def on_chat_start():
+    await on_message(cl.Message(content="hello"))
 
 
 @cl.on_message
@@ -134,6 +145,12 @@ async def on_message(message: cl.Message):
         response_message = cl.Message(content="")
         await response_message.send()
 
+        message_history.append(
+            {
+                "role": "user",
+                "content": "Thank you, if the system prompt contains the necessary information, please complete the task requested.",
+            },
+        )
         stream = await openai_client.chat.completions.create(
             messages=message_history, stream=True, **CONFIG["openai_client_kwargs"]
         )
