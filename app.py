@@ -54,12 +54,14 @@ async def get_system_prompt(query, topic, full_paper_id):
     current_rag_docs = user_selections.get("rag_docs", None)
 
     if topic and topic != current_topic:
-        if topic_summaries := get_summaries(topic):
+        topic_summaries = await get_summaries(topic)
+        if topic_summaries:
             user_selections["topic"] = topic
             current_summaries = user_selections["summaries"] = topic_summaries
 
     if full_paper_id and full_paper_id != current_full_paper_id:
-        if full_paper := get_full_paper(full_paper_id):
+        full_paper = await get_full_paper(full_paper_id)
+        if full_paper:
             user_selections["full_paper_id"] = full_paper_id
             current_full_paper = user_selections["current_full_paper"] = full_paper
 
