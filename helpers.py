@@ -1,23 +1,26 @@
+import aiosqlite
 import sqlite3
 from config import CONFIG
 
 
-def get_summaries(topic_id):
-    conn = sqlite3.connect(CONFIG["database_path"])
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, summary FROM papers where topic_id = ?", (topic_id,))
-    summaries = cursor.fetchall()
-    conn.close()
+async def get_summaries(topic_id):
+    conn = await aiosqlite.connect(CONFIG["database_path"])
+    cursor = await conn.cursor()
+    await cursor.execute(
+        "SELECT id, summary FROM papers where topic_id = ?", (topic_id,)
+    )
+    summaries = await cursor.fetchall()
+    await conn.close()
     return summaries
 
 
-def get_full_paper(id):
-    conn = sqlite3.connect(CONFIG["database_path"])
-    cursor = conn.cursor()
-    cursor.execute("SELECT full_text FROM papers WHERE id = ?", (id,))
-    result = cursor.fetchone()
+async def get_full_paper(id):
+    conn = await aiosqlite.connect(CONFIG["database_path"])
+    cursor = await conn.cursor()
+    await cursor.execute("SELECT full_text FROM papers WHERE id = ?", (id,))
+    result = await cursor.fetchone()
     full_paper = {"id": id, "text": result[0]} if result else None
-    conn.close()
+    await conn.close()
     return full_paper
 
 

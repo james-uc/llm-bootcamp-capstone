@@ -9,3 +9,5 @@ jupyter
 weaviate
 chainlit
 docx2txt
+litellm
+aiosqlite

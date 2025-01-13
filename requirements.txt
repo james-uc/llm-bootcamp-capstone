@@ -10,10 +10,13 @@ aiohappyeyeballs==2.4.4
     # via aiohttp
 aiohttp==3.11.10
     # via
+    #   litellm
     #   llama-index-core
     #   llama-index-legacy
 aiosignal==1.3.2
     # via aiohttp
+aiosqlite==0.20.0
+    # via -r requirements.in
 annotated-types==0.7.0
     # via pydantic
 anyio==4.6.2.post1
@@ -73,6 +76,7 @@ chevron==0.14.0
 click==8.1.7
     # via
     #   chainlit
+    #   litellm
     #   llama-parse
     #   nltk
     #   uvicorn
@@ -115,6 +119,8 @@ fastapi==0.115.6
     # via chainlit
 fastjsonschema==2.21.1
     # via nbformat
+filelock==3.16.1
+    # via huggingface-hub
 filetype==1.2.0
     # via
     #   chainlit
@@ -127,6 +133,7 @@ frozenlist==1.5.0
     #   aiosignal
 fsspec==2024.10.0
     # via
+    #   huggingface-hub
     #   llama-index-core
     #   llama-index-legacy
 googleapis-common-protos==1.66.0
@@ -163,6 +170,8 @@ httpx==0.27.2
     #   llama-index-legacy
     #   openai
     #   weaviate-client
+huggingface-hub==0.27.1
+    # via tokenizers
 idna==3.10
     # via
     #   anyio
@@ -171,7 +180,9 @@ idna==3.10
     #   requests
     #   yarl
 importlib-metadata==8.5.0
-    # via opentelemetry-api
+    # via
+    #   litellm
+    #   opentelemetry-api
 ipykernel==6.29.5
     # via
     #   jupyter
@@ -193,6 +204,7 @@ jinja2==3.1.4
     #   jupyter-server
     #   jupyterlab
     #   jupyterlab-server
+    #   litellm
     #   nbconvert
 jiter==0.7.1
     # via openai
@@ -206,6 +218,7 @@ jsonschema[format-nongpl]==4.23.0
     # via
     #   jupyter-events
     #   jupyterlab-server
+    #   litellm
     #   nbformat
 jsonschema-specifications==2024.10.1
     # via jsonschema
@@ -258,6 +271,8 @@ langsmith==0.1.147
     # via -r requirements.in
 lazify==0.4.0
     # via chainlit
+litellm==1.53.3
+    # via -r requirements.in
 literalai==0.0.623
     # via chainlit
 llama-cloud==0.1.6
@@ -377,6 +392,7 @@ numpy==1.26.4
 openai==1.55.0
     # via
     #   -r requirements.in
+    #   litellm
     #   llama-index-agent-openai
     #   llama-index-embeddings-openai
     #   llama-index-legacy
@@ -422,6 +438,7 @@ overrides==7.7.0
 packaging==23.2
     # via
     #   chainlit
+    #   huggingface-hub
     #   ipykernel
     #   jupyter-server
     #   jupyterlab
@@ -475,6 +492,7 @@ pydantic==2.9.2
     #   chainlit
     #   fastapi
     #   langsmith
+    #   litellm
     #   literalai
     #   llama-cloud
     #   llama-index-core
@@ -501,6 +519,7 @@ python-dotenv==1.0.1
     # via
     #   -r requirements.in
     #   chainlit
+    #   litellm
 python-engineio==4.10.1
     # via python-socketio
 python-json-logger==3.2.1
@@ -513,6 +532,7 @@ pytz==2024.2
     # via pandas
 pyyaml==6.0.2
     # via
+    #   huggingface-hub
     #   jupyter-events
     #   llama-index-core
 pyzmq==26.2.0
@@ -532,8 +552,10 @@ regex==2024.11.6
     #   tiktoken
 requests==2.32.3
     # via
+    #   huggingface-hub
     #   jupyterlab-server
     #   langsmith
+    #   litellm
     #   llama-index-core
     #   llama-index-legacy
     #   opentelemetry-exporter-otlp-proto-http
@@ -593,10 +615,13 @@ terminado==0.18.1
     #   jupyter-server-terminals
 tiktoken==0.8.0
     # via
+    #   litellm
     #   llama-index-core
     #   llama-index-legacy
 tinycss2==1.4.0
     # via nbconvert
+tokenizers==0.21.0
+    # via litellm
 tomli==2.2.1
     # via chainlit
 tornado==6.4.2
@@ -609,6 +634,7 @@ tornado==6.4.2
     #   terminado
 tqdm==4.67.0
     # via
+    #   huggingface-hub
     #   llama-index-core
     #   nltk
     #   openai
@@ -632,7 +658,9 @@ types-python-dateutil==2.9.0.20241206
     # via arrow
 typing-extensions==4.12.2
     # via
+    #   aiosqlite
     #   fastapi
+    #   huggingface-hub
     #   llama-index-core
     #   llama-index-legacy
     #   openai
