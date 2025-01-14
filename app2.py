@@ -15,13 +15,11 @@ MODEL_OPENAI_GPT4 = "openai/gpt-4o"
 MODEL_ANTHROPIC_CLAUDE = "anthropic/claude-3-5-sonnet-latest"
 
 
-async def on_tag_start(tag_name: str, stream: AsyncGenerator[str, None]):
-    # Create a parent message first
-    parent_message = cl.Message(content="")
-    await parent_message.send()
-
+async def on_tag_start(
+    parent_id: str, tag_name: str, stream: AsyncGenerator[str, None]
+):
     # Create step with parent message ID
-    step = cl.Step(name=tag_name, parent_id=parent_message.id)
+    step = cl.Step(name=tag_name, parent_id=parent_id)
     await step.send()
 
     content = ""
@@ -33,8 +31,8 @@ async def on_tag_start(tag_name: str, stream: AsyncGenerator[str, None]):
     return step
 
 
-async def on_message_start(stream: AsyncGenerator[str, None]):
-    message = cl.Message(content="")
+async def on_message_start(id: str, stream: AsyncGenerator[str, None]):
+    message = cl.Message(id=id, content="")
     await message.send()
 
     content = ""

@@ -3,6 +3,7 @@ import litellm
 from enum import Enum
 import asyncio
 import json
+import uuid
 from .agent_factory import AgentFactory
 
 
@@ -31,8 +32,8 @@ class BaseAgent:
     async def react_to(
         self,
         messages: list,
-        on_tag_start: Callable[[str, AsyncGenerator[str, None]], None],
-        on_message_start: Callable[[AsyncGenerator[str, None]], None],
+        on_tag_start: Callable[[str, str, AsyncGenerator[str, None]], None],
+        on_message_start: Callable[[str, AsyncGenerator[str, None]], None],
     ) -> AsyncGenerator[str, None]:
         """Get next response as a stream, processing any XML tags encountered.
 
@@ -47,12 +48,15 @@ class BaseAgent:
         while True:
             function_calls = []  # Array to store function calls
             agent_delegation_request = None  # Single delegation request
+            message_id = str(uuid.uuid4())
 
-            async def handle_tag(tag_name: str, stream: AsyncGenerator[str, None]):
+            async def handle_tag(
+                message_id: str, tag_name: str, stream: AsyncGenerator[str, None]
+            ):
                 nonlocal function_calls, agent_delegation_request
 
                 # Create a forwarding stream for on_tag_start
-                queue = await self._create_stream(tag_name, on_tag_start)
+                queue = await self._create_stream(message_id, tag_name, on_tag_start)
 
                 # Consume and forward tokens
                 content = ""
@@ -85,7 +89,10 @@ class BaseAgent:
             # Get the next response and accumulate the full message
             full_response = ""
             async for token in self.next_response(
-                messages, on_tag_start=handle_tag, on_message_start=on_message_start
+                messages,
+                message_id,
+                on_tag_start=handle_tag,
+                on_message_start=on_message_start,
             ):
                 full_response += token
                 yield token
@@ -101,7 +108,7 @@ class BaseAgent:
                 # Stream the result as a tagged event
                 tagged_result = f"<function_result>{result}</function_result>"
                 await self._stream_tagged_content(
-                    "function_result", result, on_tag_start
+                    message_id, "function_result", result, on_tag_start
                 )
                 yield tagged_result
 
@@ -156,7 +163,10 @@ class BaseAgent:
                     # Stream the final result or error as a tagged event
                     tagged_result = f"<delegate_agent_result>{delegation_result}</delegate_agent_result>"
                     await self._stream_tagged_content(
-                        "delegate_agent_result", delegation_result, on_tag_start
+                        message_id,
+                        "delegate_agent_result",
+                        delegation_result,
+                        on_tag_start,
                     )
                     yield tagged_result
 
@@ -176,8 +186,9 @@ class BaseAgent:
     async def next_response(
         self,
         messages: list,
-        on_tag_start: Callable[[str, AsyncGenerator[str, None]], None],
-        on_message_start: Callable[[AsyncGenerator[str, None]], None],
+        message_id: str,
+        on_tag_start: Callable[[str, str, AsyncGenerator[str, None]], None],
+        on_message_start: Callable[[str, AsyncGenerator[str, None]], None],
     ) -> AsyncGenerator[str, None]:
         """Get next response as a stream, processing any XML tags encountered.
         The returned stream includes all tokens from the response, including XML tags.
@@ -246,7 +257,7 @@ class BaseAgent:
                             if tag_queue is not None:
                                 await tag_queue.put(None)
                             tag_queue = await self._create_stream(
-                                current_tag_name, on_tag_start
+                                message_id, current_tag_name, on_tag_start
                             )
                             await tag_queue.put(tag_chunk_buffer)
                             tag_chunk_buffer = ""
@@ -268,7 +279,7 @@ class BaseAgent:
                 if message_buffer:
                     if message_queue is None:
                         message_queue = await self._create_stream(
-                            None, on_message_start
+                            message_id, None, on_message_start
                         )
                     await message_queue.put(message_buffer)
                     message_buffer = ""
@@ -313,6 +324,7 @@ class BaseAgent:
 
     async def _stream_tagged_content(
         self,
+        message_id: str,
         tag_name: str,
         content: str,
         on_tag_start: Callable[[str, AsyncGenerator[str, None]], None],
@@ -325,17 +337,17 @@ class BaseAgent:
             on_tag_start: Callback for tag processing
         """
         # Create a queue and stream for the tagged content
-        queue = await self._create_stream(tag_name, on_tag_start)
+        queue = await self._create_stream(message_id, tag_name, on_tag_start)
 
-        # Send the content with tags all at once
-        tagged_content = f"<{tag_name}>{content}</{tag_name}>"
-        await queue.put(tagged_content)
+        # Send the content all at once
+        await queue.put(content)
 
         # Signal end of stream
         await queue.put(None)
 
     async def _create_stream(
         self,
+        message_id: str,
         stream_name: str | None,
         on_stream_start: Callable[..., None] | None = None,
     ) -> asyncio.Queue:
@@ -364,9 +376,9 @@ class BaseAgent:
                     pass
 
             task = asyncio.create_task(
-                on_stream_start(stream_name, stream())
+                on_stream_start(message_id, stream_name, stream())
                 if stream_name is not None
-                else on_stream_start(stream())
+                else on_stream_start(message_id, stream())
             )
             self._active_tasks.add(task)
             task.add_done_callback(self._active_tasks.discard)
