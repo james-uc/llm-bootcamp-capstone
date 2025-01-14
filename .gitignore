@@ -163,6 +163,3 @@ cython_debug/
 
 # Chainlit files
 .chainlit
-
-# Papers directory
-papers/
