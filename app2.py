@@ -44,6 +44,23 @@ async def on_message_start(id: str, stream: AsyncGenerator[str, None]):
     return message
 
 
+async def add_message(content: str, paper_ids: list):
+    elements = []
+    if len(paper_ids) < 3:
+        for paper_id in paper_ids:
+            elements.append(cl.Pdf(name=paper_id, path=f"./papers/{paper_id}"))
+    else:
+        # content += "\n\nThe response is based on the following papers:"
+        # for paper_id in paper_ids:
+        #     content += f"\n- [{paper_id}](./papers/{paper_id})"
+        for paper_id in paper_ids:
+            elements.append(cl.File(name=paper_id, path=f"./papers/{paper_id}"))
+
+    message = cl.Message(content=content, elements=elements)
+    await message.send()
+    return message
+
+
 @traceable
 @cl.on_chat_start
 def on_chat_start():
@@ -85,7 +102,10 @@ async def on_message(message: cl.Message):
 
     full_response = ""
     async for token in agent.react_to(
-        message_history, on_tag_start=on_tag_start, on_message_start=on_message_start
+        message_history,
+        on_tag_start=on_tag_start,
+        on_message_start=on_message_start,
+        add_message=add_message,
     ):
         full_response += token
 

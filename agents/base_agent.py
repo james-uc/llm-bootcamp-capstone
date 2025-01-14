@@ -34,6 +34,7 @@ class BaseAgent:
         messages: list,
         on_tag_start: Callable[[str, str, AsyncGenerator[str, None]], None],
         on_message_start: Callable[[str, AsyncGenerator[str, None]], None],
+        add_message: Callable[[str], None],
     ) -> AsyncGenerator[str, None]:
         """Get next response as a stream, processing any XML tags encountered.
 
@@ -149,6 +150,7 @@ class BaseAgent:
                             delegated_messages,
                             on_tag_start=on_tag_start,
                             on_message_start=None,
+                            add_message=add_message,
                         ):
                             yield token
 
@@ -160,15 +162,47 @@ class BaseAgent:
                 except Exception as e:
                     delegation_result = f"ERROR: Failed to execute agent delegation: {str(e)}. Do not retry delegation."
                 finally:
-                    # Stream the final result or error as a tagged event
-                    tagged_result = f"<delegate_agent_result>{delegation_result}</delegate_agent_result>"
-                    await self._stream_tagged_content(
-                        message_id,
-                        "delegate_agent_result",
-                        delegation_result,
-                        on_tag_start,
-                    )
-                    yield tagged_result
+
+                    try:
+                        delegation_result_json = json.loads(
+                            delegation_result.removeprefix("```json").removesuffix(
+                                "```"
+                            )
+                        )
+                        if (
+                            not isinstance(delegation_result_json, dict)
+                            or "response" not in delegation_result_json
+                        ):
+                            delegation_result_json = None
+                    except json.JSONDecodeError:
+                        delegation_result_json = None
+
+                    if delegation_result_json:
+                        await add_message(
+                            delegation_result_json["response"],
+                            delegation_result_json.get("paper_ids", []),
+                        )
+                        message_response = delegation_result_json["response"]
+                        if paper_ids := delegation_result_json.get("paper_ids"):
+                            message_response += f"\n\nPaper IDs: {', '.join(paper_ids)}"
+
+                        messages.append(
+                            {
+                                "role": "assistant",
+                                "content": message_response,
+                            }
+                        )
+                        break
+                    else:
+                        # Stream the final result or error as a tagged event
+                        tagged_result = f"<delegate_agent_result>{delegation_result}</delegate_agent_result>"
+                        await self._stream_tagged_content(
+                            message_id,
+                            "delegate_agent_result",
+                            delegation_result,
+                            on_tag_start,
+                        )
+                        yield tagged_result
 
                     # Add only the result to message history
                     messages.append({"role": "user", "content": tagged_result})
